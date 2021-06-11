@@ -8,3 +8,9 @@
  */
 
 rootProject.name = 'model-up'
+include 'core'
+include 'processor-jre8'
+include 'processor-jre16'
+
+include 'examples-jre8'
+include 'examples-jre16'

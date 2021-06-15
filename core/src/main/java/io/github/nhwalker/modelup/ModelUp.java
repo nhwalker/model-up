@@ -1,6 +1,7 @@
 package io.github.nhwalker.modelup;
 
 import static java.lang.annotation.ElementType.TYPE;
+import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.CLASS;
 
 import java.lang.annotation.Documented;
@@ -31,8 +32,31 @@ public @interface ModelUp {
   String recordPackageName() default "";
 
   boolean memorizeHash() default false;
-  
+
   boolean memorizeToString() default false;
+
+  String argsExtension() default "";
   
-  String argsExtension() default ""; 
+  boolean defaultConstructor() default true;
+
+  @Documented
+  @Retention(CLASS)
+  @Target(METHOD)
+  @interface InitialArgs {
+    boolean inherit() default true;
+  }
+
+  @Documented
+  @Retention(CLASS)
+  @Target(METHOD)
+  @interface Sanatize {
+    boolean inherit() default true;
+  }
+
+  @Documented
+  @Retention(CLASS)
+  @Target(METHOD)
+  @interface Validate {
+    boolean inherit() default true;
+  }
 }

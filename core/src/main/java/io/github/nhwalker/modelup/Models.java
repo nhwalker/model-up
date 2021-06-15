@@ -23,6 +23,10 @@ public final class Models {
     return new ModelAsMap(model);
   }
 
+  public static ModelArgsAsMap toMap(ModelArgs args) {
+    return new ModelArgsAsMap(args);
+  }
+
   public static String prettyToString(Model model) {
     if (model == null) {
       return "null";

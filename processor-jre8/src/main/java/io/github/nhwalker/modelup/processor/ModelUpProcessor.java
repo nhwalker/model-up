@@ -1,6 +1,7 @@
 package io.github.nhwalker.modelup.processor;
 
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -15,6 +16,7 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
@@ -25,6 +27,7 @@ import javax.tools.Diagnostic.Kind;
 
 import com.google.auto.common.MoreElements;
 import com.google.auto.common.MoreTypes;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
@@ -32,10 +35,14 @@ import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeVariableName;
 
+import io.github.nhwalker.modelup.Model;
 import io.github.nhwalker.modelup.ModelUp;
+import io.github.nhwalker.modelup.ModelWithArgs;
 
 public class ModelUpProcessor extends AbstractProcessor {
   private static final Set<String> IGNORE = new HashSet<>(Arrays.asList("getClass", "hashCode", "toString", "clone"));
+
+  private static final Set<String> IGNORE_MODEL = new HashSet<>(Arrays.asList("fieldKeys"));
 
   @Override
   public Set<String> getSupportedAnnotationTypes() {
@@ -47,8 +54,17 @@ public class ModelUpProcessor extends AbstractProcessor {
     return SourceVersion.RELEASE_8;
   }
 
+  private boolean testIsInstance(TypeMirror candidate, Class<?> isA) {
+    TypeElement interfaceType = processingEnv.getElementUtils().getTypeElement(isA.getCanonicalName());
+    if (interfaceType != null) {
+      return processingEnv.getTypeUtils().isAssignable(candidate, interfaceType.asType());
+    }
+    return false;
+  }
+
   @Override
   public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+
     Set<? extends Element> elements = roundEnv.getElementsAnnotatedWith(ModelUp.class);
     Map<ClassName, ModelUpTypeDefinition> cache = new LinkedHashMap<>();
 
@@ -106,7 +122,7 @@ public class ModelUpProcessor extends AbstractProcessor {
     }
   }
 
-  private List<ModelKeyDefinition> findAllKeys(TypeElement e) {
+  private List<ModelKeyDefinition> findAllKeys(TypeElement e, boolean isAModel) {
     ImmutableSet<ExecutableElement> methods = MoreElements.getAllMethods(e, processingEnv.getTypeUtils(),
         processingEnv.getElementUtils());
 
@@ -116,7 +132,7 @@ public class ModelUpProcessor extends AbstractProcessor {
         ExecutableElement method = (ExecutableElement) member;
         String name = member.getSimpleName().toString();
         if (!method.getModifiers().contains(Modifier.STATIC) && !IGNORE.contains(name)
-            && method.getParameters().isEmpty()) {
+            && method.getParameters().isEmpty() && (!isAModel || !IGNORE_MODEL.contains(name))) {
           TypeMirror returnType = method.getReturnType();
           if (returnType.getKind() != TypeKind.VOID) {
             String comment = processingEnv.getElementUtils().getDocComment(method);
@@ -278,17 +294,18 @@ public class ModelUpProcessor extends AbstractProcessor {
 
     if (modelType instanceof ParameterizedTypeName) {
       ParameterizedTypeName parameterized = (ParameterizedTypeName) modelType;
-      List<TypeVariableName> params = new ArrayList<>();
+      List<TypeVariableName> completeParams = new ArrayList<>();
       parameterized.typeArguments.forEach(paramType -> {
         if (paramType instanceof TypeVariableName) {
           TypeVariableName param = (TypeVariableName) paramType;
-          params.add(param);
+          completeParams.add(param);
         } else {
           // TODO ERROR
         }
       });
-      def.typeParameters(Collections.unmodifiableList(params));
-      TypeName[] args = params.toArray(new TypeName[0]);
+      def.typeParameters(Collections.unmodifiableList(completeParams));
+
+      TypeName[] args = completeParams.toArray(new TypeName[0]);
       def.argsType(ParameterizedTypeName.get(rawArgsName, args));
       def.argsBaseType(ParameterizedTypeName.get(rawArgsNameBase, args));
       def.recordType(ParameterizedTypeName.get(rawRecordName, args));
@@ -299,6 +316,10 @@ public class ModelUpProcessor extends AbstractProcessor {
       def.recordType(rawRecordName);
       def.typeParameters(Collections.emptyList());
     }
+
+    ArrayList<StaticMethodId> initializeArgsMethods = new ArrayList<>();
+    ArrayList<StaticMethodId> sanatizeArgsMethods = new ArrayList<>();
+    ArrayList<StaticMethodId> validateMethods = new ArrayList<>();
 
     ArrayList<TypeName> modelExtends = new ArrayList<>();
     ArrayList<TypeName> argsExtends = new ArrayList<>();
@@ -314,14 +335,79 @@ public class ModelUpProcessor extends AbstractProcessor {
         } else {
           argsExtends.add(rawParentArgsType);
         }
+
+        initializeArgsMethods.addAll(parentDefinition.initializeArgsMethods());
+        sanatizeArgsMethods.addAll(parentDefinition.sanatizeArgsMethods());
+        validateMethods.addAll(parentDefinition.validateMethods());
       }
     }
 
+    StaticMethodId initMethod = findStaticMethod(type, ModelUp.InitialArgs.class, ModelUp.InitialArgs::inherit);
+    if (initMethod != null) {
+      if (!initMethod.isInherit()) {
+        initializeArgsMethods.clear();
+      }
+      initializeArgsMethods.add(initMethod);
+    }
+
+    StaticMethodId sanatizeMethod = findStaticMethod(type, ModelUp.Sanatize.class, ModelUp.Sanatize::inherit);
+    if (sanatizeMethod != null) {
+      if (!sanatizeMethod.isInherit()) {
+        sanatizeArgsMethods.clear();
+      }
+      sanatizeArgsMethods.add(sanatizeMethod);
+    }
+
+    StaticMethodId validateMethod = findStaticMethod(type, ModelUp.Validate.class, ModelUp.Validate::inherit);
+    if (validateMethod != null) {
+      if (!validateMethod.isInherit()) {
+        validateMethods.clear();
+      }
+      validateMethods.add(validateMethod);
+    }
+
+    def.setAModel(testIsInstance(type.asType(), Model.class));
+    def.setAModelWithArgs(testIsInstance(type.asType(), ModelWithArgs.class));
+
     def.argsTypeExtends(argsExtends);
     def.modelExtends(modelExtends);
-    def.keys(findAllKeys(type));
+    def.keys(findAllKeys(type, def.isAModel()));
+    def.initializeArgsMethods(initializeArgsMethods);
+    def.sanatizeArgsMethods(sanatizeArgsMethods);
+    def.validateMethods(validateMethods);
+    def.defaultConstructor(modelUpAnn.defaultConstructor());
 
     return def;
+  }
+
+  private <A extends Annotation> StaticMethodId findStaticMethod(TypeElement e, Class<A> annotationType,
+      Predicate<A> inherit) {
+    List<? extends Element> enclosed = e.getEnclosedElements();
+    for (Element inner : enclosed) {
+      if (MoreElements.isType(inner)) {
+        TypeElement innerType = MoreElements.asType(inner);
+        List<? extends Element> innerEnclosed = innerType.getEnclosedElements();
+        for (Element innerInner : innerEnclosed) {
+          if (innerInner.getKind() == ElementKind.METHOD) {
+            ExecutableElement method = MoreElements.asExecutable(innerInner);
+            A ann = method.getAnnotation(annotationType);
+            if (ann != null) {
+              return new StaticMethodId(TypeNameUtils.rawType(TypeName.get(e.asType())),
+                  method.getSimpleName().toString(), inherit.apply(ann));
+            }
+          }
+        }
+
+      } else if (inner.getKind() == ElementKind.METHOD) {
+        ExecutableElement method = MoreElements.asExecutable(inner);
+        A ann = method.getAnnotation(annotationType);
+        if (ann != null) {
+          return new StaticMethodId(TypeNameUtils.rawType(TypeName.get(e.asType())), method.getSimpleName().toString(),
+              inherit.apply(ann));
+        }
+      }
+    }
+    return null;
   }
 
   private ModelUpTypeDefinition findModelUpDef(Map<ClassName, ModelUpTypeDefinition> cache, TypeMirror parent) {
@@ -334,4 +420,23 @@ public class ModelUpProcessor extends AbstractProcessor {
     }
     return null;
   }
+
+//  private ArrayList<TypeVariableName> removeModelWithArgsParams(List<TypeVariableName> parameters, TypeElement type) {
+//    LinkedHashMap<String, TypeVariableName> paramMap = new LinkedHashMap<>();
+//    parameters.forEach(x -> paramMap.put(x.name, x));
+//    for (TypeMirror superType : type.getInterfaces()) {
+//      if (MoreTypes.isTypeOf(ModelWithArgs.class, superType)) {
+//        TypeName superTypeName = TypeName.get(superType);
+//        if (superTypeName instanceof ParameterizedTypeName) {
+//          for (TypeName superTypeVars : ((ParameterizedTypeName) superTypeName).typeArguments) {
+//            if (superTypeVars instanceof TypeVariableName) {
+//              paramMap.remove(((TypeVariableName) superTypeVars).name);
+//            }
+//          }
+//        }
+//      }
+//    }
+//    return new ArrayList<>(paramMap.values());
+//  }
+
 }

@@ -23,6 +23,61 @@ public class ModelUpTypeDefinition {
 
   private boolean memorizeHash;
   private boolean memorizeToString;
+  private List<StaticMethodId> initializeArgsMethods;
+  private List<StaticMethodId> sanatizeArgsMethods;
+  private List<StaticMethodId> validateMethods;
+  private boolean defaultConstructor;
+
+  private boolean isAModel;
+  private boolean isAModelWithArgs;
+
+  public void setAModel(boolean isAModel) {
+    this.isAModel = isAModel;
+  }
+
+  public void setAModelWithArgs(boolean isAModelWithArgs) {
+    this.isAModelWithArgs = isAModelWithArgs;
+  }
+
+  public boolean isAModel() {
+    return isAModel;
+  }
+
+  public boolean isAModelWithArgs() {
+    return isAModelWithArgs;
+  }
+
+  public boolean defaultConstructor() {
+    return defaultConstructor;
+  }
+
+  public void defaultConstructor(boolean defaultConstructor) {
+    this.defaultConstructor = defaultConstructor;
+  }
+
+  public List<StaticMethodId> initializeArgsMethods() {
+    return initializeArgsMethods;
+  }
+
+  public List<StaticMethodId> sanatizeArgsMethods() {
+    return sanatizeArgsMethods;
+  }
+
+  public List<StaticMethodId> validateMethods() {
+    return validateMethods;
+  }
+
+  public void initializeArgsMethods(List<StaticMethodId> initializeArgsMethods) {
+    this.initializeArgsMethods = initializeArgsMethods;
+  }
+
+  public void sanatizeArgsMethods(List<StaticMethodId> sanatizeArgsMethods) {
+    this.sanatizeArgsMethods = sanatizeArgsMethods;
+  }
+
+  public void validateMethods(List<StaticMethodId> validateMethods) {
+    this.validateMethods = validateMethods;
+  }
 
   public void argsBaseType(TypeName argsBaseType) {
     this.argsBaseType = argsBaseType;

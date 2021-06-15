@@ -14,12 +14,19 @@ public class MapModel implements Model {
     return new Builder();
   }
 
-  public static final Builder newBuilder(Model copy) {
+  public static final Builder newBuilder(ModelOrArgs copy) {
     return newBuilder().putAll(copy);
   }
 
-  public static final MapModel copy(Model copy) {
-    return new MapModel(Models.toMap(copy));
+  public static final MapModel copy(ModelOrArgs copy) {
+    if (copy instanceof Model) {
+      return new MapModel(Models.toMap((Model) copy));
+    } else if (copy instanceof ModelArgs) {
+      return new MapModel(Models.toMap((ModelArgs) copy));
+    } else {
+      throw new UnsupportedOperationException("Unknown type " + copy.getClass());
+    }
+
   }
 
   private final Map<ModelKey<?>, Object> values;
@@ -82,11 +89,15 @@ public class MapModel implements Model {
       return this;
     }
 
-    public <T> Builder putAll(Model fields) {
+    public <T> Builder putAll(ModelOrArgs fields) {
       if (fields instanceof MapModel) {
         putAll((MapModel) fields);
+      } else if (fields instanceof Model) {
+        values.putAll(Models.toMap((Model) fields));
+      } else if (fields instanceof ModelArgs) {
+        values.putAll(Models.toMap((ModelArgs) fields));
       } else {
-        values.putAll(Models.toMap(fields));
+        throw new UnsupportedOperationException("Unknown type " + fields.getClass());
       }
       return this;
     }

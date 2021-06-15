@@ -6,6 +6,9 @@ import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * Immutable map view of a {@link Model}
+ */
 public class ModelAsMap extends AbstractMap<ModelKey<?>, Object> {
 
   private final Model model;

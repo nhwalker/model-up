@@ -13,13 +13,59 @@ public class ModelUpTypeDefinition {
 
   private TypeName argsType;
   private List<TypeName> argsTypeExtends;
+  private boolean generateArgs;
 
   private TypeName keysType;
+  private boolean generateKeys;
   private TypeName recordType;
+  private boolean generateRecord;
+
+  private boolean memorizeHash;
+  private boolean memorizeToString;
+
+  public void memorizeHash(boolean memorizeHash) {
+    this.memorizeHash = memorizeHash;
+  }
+
+  public void memorizeToString(boolean memorizeToString) {
+    this.memorizeToString = memorizeToString;
+  }
+
+  public boolean memorizeHash() {
+    return memorizeHash;
+  }
+
+  public boolean memorizeToString() {
+    return memorizeToString;
+  }
 
   private List<ModelKeyDefinition> keys;
 
   public ModelUpTypeDefinition() {
+  }
+
+  public boolean generateArgs() {
+    return generateArgs;
+  }
+
+  public void generateArgs(boolean generateArgs) {
+    this.generateArgs = generateArgs;
+  }
+
+  public boolean generateKeys() {
+    return generateKeys;
+  }
+
+  public void generateKeys(boolean generateKeys) {
+    this.generateKeys = generateKeys;
+  }
+
+  public boolean generateRecord() {
+    return generateRecord;
+  }
+
+  public void generateRecord(boolean generateRecord) {
+    this.generateRecord = generateRecord;
   }
 
   public List<TypeName> argsTypeExtends() {

@@ -15,7 +15,7 @@ public class ModelKeyDefinition {
   
   private final TypeName belongsTo;
   private final String fieldDescription;
-
+  
   public ModelKeyDefinition(String name, TypeName valueType, TypeName effectiveType, TypeName effectiveKeyType,
       TypeName belongsTo, String fieldDescription) {
     this.name = name;

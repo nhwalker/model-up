@@ -62,9 +62,9 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     recordSpec.addMethod(canonConstructor());
 
     recordSpec.addMethod(withChangeMethod(argsTypeName));
-    recordSpec.addMethod(hashCodeMethod());
-    recordSpec.addMethod(equalsMethod(getDefinition().recordType()));
-    recordSpec.addMethod(toStringMethod(getDefinition().recordType()));
+    addHashCodeMethod(recordSpec, true);
+    recordSpec.addMethod(equalsMethod(getDefinition().recordType(), true));
+    addToStringMethod(getDefinition().recordType(), recordSpec, true);
 
     recordSpec.addType(createArgsType(argsTypeRawName, argsTypeName));
 
@@ -98,9 +98,9 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     argsSpec.addMethod(copyConstructor(getDefinition().modelType()));
     argsSpec.addMethod(canonConstructor());
 
-    argsSpec.addMethod(hashCodeMethod());
-    argsSpec.addMethod(equalsMethod(argsSpecRawName));
-    argsSpec.addMethod(toStringMethod(argsSpecRawName));
+    addHashCodeMethod(argsSpec, false);
+    argsSpec.addMethod(equalsMethod(argsSpecRawName, false));
+    addToStringMethod(argsSpecRawName, argsSpec, false);
 
     return argsSpec.build();
 
@@ -191,34 +191,73 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     return b.build();
   }
 
-  private MethodSpec hashCodeMethod() {
-    MethodSpec.Builder method = MethodSpec.methodBuilder("hashCode")//
+  private void addHashCodeMethod(TypeSpec.Builder type, boolean mayMemorize) {
+    MethodSpec.Builder hashCode = MethodSpec.methodBuilder("hashCode")//
         .addModifiers(Modifier.PUBLIC)//
         .returns(int.class)//
         .addAnnotation(Override.class);
 
-    CodeBlock.Builder code = CodeBlock.builder();
-    code.addStatement("final int prime = 31");
-    code.addStatement("int result = 1");
+    CodeBlock.Builder computeCode = CodeBlock.builder();
+    computeCode.addStatement("final int prime = 31");
+    computeCode.addStatement("int result = 1");
     for (ModelKeyDefinition key : getDefinition().keys()) {
       if (key.getValueType().isPrimitive()) {
-        code.addStatement(//
+        computeCode.addStatement(//
             "result = prime * result + $T.hashCode($L)", //
             key.getValueType().box(), key.getName());
       } else {
-        code.addStatement(//
+        computeCode.addStatement(//
             "result = prime * result + $T.hashCode($L)", //
             Objects.class, key.getName());
       }
     }
-    code.addStatement("return result");
 
-    method.addCode(code.build());
+    if (mayMemorize && getDefinition().memorizeHash()) {
+      type.addField(FieldSpec.builder(Integer.class, "hashCode", Modifier.PRIVATE).build());
+      CodeBlock.Builder checkCode = CodeBlock.builder();
+      checkCode.beginControlFlow("if (this.hashCode == null)");
+      checkCode.add(computeCode.build());
+      checkCode.addStatement("this.hashCode = result");
+      checkCode.addStatement("return result");
+      checkCode.endControlFlow();
+      checkCode.addStatement("return this.hashCode");
+      hashCode.addCode(checkCode.build());
+    } else {
+      hashCode.addCode(computeCode.build());
+      hashCode.addStatement("return result");
+    }
 
-    return method.build();
+    type.addMethod(hashCode.build());
   }
 
-  private MethodSpec equalsMethod(TypeName name) {
+//  private MethodSpec hashCodeMethod() {
+//    MethodSpec.Builder method = MethodSpec.methodBuilder("hashCode")//
+//        .addModifiers(Modifier.PUBLIC)//
+//        .returns(int.class)//
+//        .addAnnotation(Override.class);
+//
+//    CodeBlock.Builder code = CodeBlock.builder();
+//    code.addStatement("final int prime = 31");
+//    code.addStatement("int result = 1");
+//    for (ModelKeyDefinition key : getDefinition().keys()) {
+//      if (key.getValueType().isPrimitive()) {
+//        code.addStatement(//
+//            "result = prime * result + $T.hashCode($L)", //
+//            key.getValueType().box(), key.getName());
+//      } else {
+//        code.addStatement(//
+//            "result = prime * result + $T.hashCode($L)", //
+//            Objects.class, key.getName());
+//      }
+//    }
+//    code.addStatement("return result");
+//
+//    method.addCode(code.build());
+//
+//    return method.build();
+//  }
+
+  private MethodSpec equalsMethod(TypeName name, boolean mayMemorizeHash) {
     MethodSpec.Builder method = MethodSpec.methodBuilder("equals")//
         .addModifiers(Modifier.PUBLIC)//
         .returns(boolean.class)//
@@ -249,6 +288,13 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     }
     code.addStatement("$T other = ($T)obj", otherType, otherType);
 
+    if (mayMemorizeHash && getDefinition().memorizeHash()) {
+      code.beginControlFlow(
+          "if (this.hashCode !=null && other.hashCode !=null && !this.hashCode.equals(other.hashCode))");
+      code.addStatement("return false");
+      code.endControlFlow();
+    }
+
     code.add("$[return ");
     if (getDefinition().keys().isEmpty()) {
       code.add("true");
@@ -274,27 +320,71 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     return method.build();
   }
 
-  private MethodSpec toStringMethod(TypeName name) {
-    MethodSpec.Builder method = MethodSpec.methodBuilder("toString")//
+  
+  private void addToStringMethod(TypeName name, TypeSpec.Builder type, boolean mayMemorize) {
+    MethodSpec.Builder toString = MethodSpec.methodBuilder("toString")//
         .addModifiers(Modifier.PUBLIC)//
         .returns(String.class)//
         .addAnnotation(Override.class);
 
-    CodeBlock.Builder code = CodeBlock.builder();
-    code.add("$[return \"$L[\"\n", String.join(".",TypeNameUtils.rawType(name).simpleNames()));
+    CodeBlock.Builder computeCode = CodeBlock.builder();
+    computeCode.add("\"$L[\"\n", String.join(".", TypeNameUtils.rawType(name).simpleNames()));
     Iterator<ModelKeyDefinition> keyIter = getKeys().iterator();
-    if(keyIter.hasNext()) {
+    if (keyIter.hasNext()) {
       ModelKeyDefinition key = keyIter.next();
-      code.add("+ \"$L=\" + $L", key.getName(), key.getName());
-      while(keyIter.hasNext()) {
+      computeCode.add("+ \"$L=\" + $L", key.getName(), key.getName());
+      while (keyIter.hasNext()) {
         key = keyIter.next();
-        code.add("\n+ \", $L=\" + $L", key.getName(), key.getName()); 
-      }  
+        computeCode.add("\n+ \", $L=\" + $L", key.getName(), key.getName());
+      }
     }
-    code.add("+ \"]\"");
-    code.add(";\n$]");
-    method.addCode(code.build());
-    return method.build();
+    computeCode.add("+ \"]\"");
+    
+    
+    if (mayMemorize && getDefinition().memorizeToString()) {
+      type.addField(FieldSpec.builder(String.class, "toString", Modifier.PRIVATE).build());
+      CodeBlock.Builder checkCode = CodeBlock.builder();
+      checkCode.beginControlFlow("if (this.toString == null)");
+      checkCode.add("$[this.toString = ");
+      checkCode.add(computeCode.build());
+      checkCode.add(";\n$]");
+      checkCode.endControlFlow();
+      toString.addCode(checkCode.build());
+      toString.addStatement("return this.toString");
+    } else {
+      CodeBlock.Builder code = CodeBlock.builder();
+      code.add("$[return ");
+      code.add(computeCode.build());
+      code.add(";\n$]");
+      toString.addCode(code.build());
+    }
+    
+    type.addMethod(toString.build());
   }
+  
+  
+  
+//  private MethodSpec toStringMethod(TypeName name) {
+//    MethodSpec.Builder method = MethodSpec.methodBuilder("toString")//
+//        .addModifiers(Modifier.PUBLIC)//
+//        .returns(String.class)//
+//        .addAnnotation(Override.class);
+//
+//    CodeBlock.Builder code = CodeBlock.builder();
+//    code.add("$[return \"$L[\"\n", String.join(".", TypeNameUtils.rawType(name).simpleNames()));
+//    Iterator<ModelKeyDefinition> keyIter = getKeys().iterator();
+//    if (keyIter.hasNext()) {
+//      ModelKeyDefinition key = keyIter.next();
+//      code.add("+ \"$L=\" + $L", key.getName(), key.getName());
+//      while (keyIter.hasNext()) {
+//        key = keyIter.next();
+//        code.add("\n+ \", $L=\" + $L", key.getName(), key.getName());
+//      }
+//    }
+//    code.add("+ \"]\"");
+//    code.add(";\n$]");
+//    method.addCode(code.build());
+//    return method.build();
+//  }
 
 }

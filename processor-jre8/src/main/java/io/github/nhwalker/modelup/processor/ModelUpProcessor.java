@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -55,9 +56,15 @@ public class ModelUpProcessor extends AbstractProcessor {
       if (e instanceof TypeElement) {
         TypeElement typeElement = (TypeElement) e;
         ModelUpTypeDefinition typeDef = getOrCreate(cache, roundEnv, typeElement);
-        runKeysGenerator(typeDef, roundEnv, typeElement);
-        runArgsInterfaceGenerator(typeDef, roundEnv, typeElement);
-        runRecordGenerator(typeDef, roundEnv, typeElement);
+        if (typeDef.generateKeys()) {
+          runKeysGenerator(typeDef, roundEnv, typeElement);
+        }
+        if (typeDef.generateArgs()) {
+          runArgsInterfaceGenerator(typeDef, roundEnv, typeElement);
+        }
+        if (typeDef.generateRecord()) {
+          runRecordGenerator(typeDef, roundEnv, typeElement);
+        }
       }
     }
     return false;
@@ -122,11 +129,6 @@ public class ModelUpProcessor extends AbstractProcessor {
             TypeName effectiveType = TypeName.get(MoreTypes.asExecutable(methodMirror).getReturnType());
             TypeName effectiveKeyType = effectiveType(effectiveType);
 
-            log("returnTypeName: " + returnTypeName);
-            log("methodMirror: " + methodMirror);
-            log("effectiveType: " + effectiveType);
-            log("effectiveKeyType: " + effectiveKeyType);
-
             fields.add(new ModelKeyDefinition(name, returnTypeName, effectiveType, effectiveKeyType,
                 TypeName.get(e.asType()), doc));
           }
@@ -188,30 +190,74 @@ public class ModelUpProcessor extends AbstractProcessor {
     return def;
   }
 
+  private static ClassName getRawArgsName(String basePackageName, String baseName, ModelUp modelUpAnn) {
+    String packageName = basePackageName;
+    if (!modelUpAnn.argsPackageName().isEmpty()) {
+      packageName = modelUpAnn.argsPackageName();
+    }
+    String name;
+    if (!modelUpAnn.argsTypeName().isEmpty()) {
+      name = modelUpAnn.argsTypeName();
+    } else {
+      name = baseName + "Args";
+    }
+    return ClassName.get(packageName, name);
+  }
+
+  private static ClassName getRawKeysName(String basePackageName, String baseName, ModelUp modelUpAnn) {
+    String packageName = basePackageName;
+    if (!modelUpAnn.keysPackageName().isEmpty()) {
+      packageName = modelUpAnn.keysPackageName();
+    }
+    String name;
+    if (!modelUpAnn.keysTypeName().isEmpty()) {
+      name = modelUpAnn.keysTypeName();
+    } else {
+      name = baseName + "Keys";
+    }
+    return ClassName.get(packageName, name);
+  }
+
+  private static ClassName getRawRecordName(String basePackageName, String baseName, ModelUp modelUpAnn) {
+    String packageName = basePackageName;
+    if (!modelUpAnn.recordPackageName().isEmpty()) {
+      packageName = modelUpAnn.recordPackageName();
+    }
+    String name;
+    if (!modelUpAnn.recordTypeName().isEmpty()) {
+      name = modelUpAnn.recordTypeName();
+    } else {
+      name = baseName + "Record";
+    }
+    return ClassName.get(packageName, name);
+  }
+
   private ModelUpTypeDefinition createModelUpTypeDef(Map<ClassName, ModelUpTypeDefinition> cache,
       RoundEnvironment roundEnv, TypeElement type) {
+    ModelUp modelUpAnn = Objects.requireNonNull(type.getAnnotation(ModelUp.class));
+
     ModelUpTypeDefinition def = new ModelUpTypeDefinition();
     String packageName = processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
     String baseName = type.getSimpleName().toString();
     TypeName modelType = TypeName.get(type.asType());
     def.modelType(modelType);
 
-    ClassName rawArgsName = ClassName.get(packageName, baseName + "Args");
-    ClassName rawKeysName = ClassName.get(packageName, baseName + "Keys");
-    ClassName rawRecordName = ClassName.get(packageName, baseName + "Record");
-
+    ClassName rawArgsName = getRawArgsName(packageName, baseName, modelUpAnn);
+    ClassName rawKeysName = getRawKeysName(packageName, baseName, modelUpAnn);
+    ClassName rawRecordName = getRawRecordName(packageName, baseName, modelUpAnn);
+    def.generateArgs(modelUpAnn.generateArgs());
+    def.generateKeys(modelUpAnn.generateKeys());
+    def.generateRecord(modelUpAnn.generateRecord());
+    def.memorizeHash(modelUpAnn.memorizeHash());
+    def.memorizeToString(modelUpAnn.memorizeToString());
     def.keysType(rawKeysName);
 
-    log("::::::::::::::::::::::::::::::::");
-    log(type);
-    log("::::::::::::::::::::::::::::::::");
     if (modelType instanceof ParameterizedTypeName) {
       ParameterizedTypeName parameterized = (ParameterizedTypeName) modelType;
       List<TypeVariableName> params = new ArrayList<>();
       parameterized.typeArguments.forEach(paramType -> {
         if (paramType instanceof TypeVariableName) {
           TypeVariableName param = (TypeVariableName) paramType;
-          log("PREFIX: ", paramType);
           params.add(param);
         } else {
           // TODO ERROR
@@ -247,17 +293,7 @@ public class ModelUpProcessor extends AbstractProcessor {
     def.modelExtends(modelExtends);
     def.keys(findAllKeys(roundEnv, type));
 
-    log(def);
     return def;
-  }
-
-  private void log(Object obj) {
-    processingEnv.getMessager().printMessage(Kind.WARNING, String.valueOf(obj));
-  }
-
-  private void log(String prefix, Object obj) {
-    processingEnv.getMessager().printMessage(Kind.WARNING,
-        prefix + ": " + (obj == null ? "null" : "[" + obj.getClass() + "] " + obj));
   }
 
 }

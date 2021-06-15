@@ -11,11 +11,28 @@ import java.lang.annotation.Target;
 @Retention(CLASS)
 @Target(TYPE)
 public @interface ModelUp {
-  
-  String fieldsName() default "";
 
-  String parametersNames() default "";
+  boolean generateKeys() default true;
 
-  String valueTypeName() default "";
+  String keysTypeName() default "";
+
+  String keysPackageName() default "";
+
+  boolean generateArgs() default true;
+
+  String argsTypeName() default "";
+
+  String argsPackageName() default "";
+
+  boolean generateRecord() default true;
+
+  String recordTypeName() default "";
+
+  String recordPackageName() default "";
+
+  boolean memorizeHash() default false;
   
+  boolean memorizeToString() default false;
+  
+  Class<?> argsExtension() default void.class; 
 }

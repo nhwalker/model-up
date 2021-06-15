@@ -7,4 +7,5 @@ public interface DeliveryDriver<T> extends Person{
   
   T payload();
   
+  long id();
 }

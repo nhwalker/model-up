@@ -1,5 +1,7 @@
 package io.github.nhwalker.modelup.processor;
 
+import java.util.function.Consumer;
+
 import javax.lang.model.element.Modifier;
 
 import com.squareup.javapoet.ClassName;
@@ -36,17 +38,25 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     TypeName argsSpecName = ClassName.get(TypeNameUtils.packageName(getDefinition().recordType()),
         TypeNameUtils.rawType(getDefinition().recordType()).simpleName(), "Args");
     argsSpec.addModifiers(Modifier.PUBLIC, Modifier.FINAL, Modifier.STATIC);
-    if(!getDefinition().typeParameters().isEmpty()) {
+    if (!getDefinition().typeParameters().isEmpty()) {
       getDefinition().typeParameters().forEach(arg -> {
         argsSpec.addTypeVariable(arg);
       });
       argsSpecName = ParameterizedTypeName.get((ClassName) argsSpecName,
           getDefinition().typeParameters().toArray(new TypeName[0]));
     }
-    
+
     argsSpec.addSuperinterface(getDefinition().argsType());
 
-    CodeBlock.Builder constructor = CodeBlock.builder();
+    MethodSpec.Builder recordCopyConstructorBldr = MethodSpec.constructorBuilder()//
+        .addModifiers(Modifier.PUBLIC)//
+        .addParameter(argsSpecName, "args");
+    MethodSpec.Builder argsCopyConstructorBldr = MethodSpec.constructorBuilder()//
+        .addModifiers(Modifier.PUBLIC)//
+        .addParameter(argsSpecName, "args");
+    MethodSpec.Builder recordCannonConstructorBldr = MethodSpec.constructorBuilder()//
+        .addModifiers(Modifier.PUBLIC);
+
     for (ModelKeyDefinition key : getKeys()) {
       FieldSpec recordField = FieldSpec//
           .builder(key.getEffectiveType(), key.getName(), Modifier.PRIVATE, Modifier.FINAL)//
@@ -62,17 +72,44 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
       argsSpec.addMethod(createGetter(key));
       argsSpec.addMethod(createSetter(key));
 
-      constructor.addStatement("this.$N = args.$N()", key.getName(), key.getName());
+      recordCopyConstructorBldr.addStatement("this.$N = args.$N()", key.getName(), key.getName());
+      argsCopyConstructorBldr.addStatement("this.$N = args.$N()", key.getName(), key.getName());
+      recordCannonConstructorBldr.addStatement("this.$N = $N", key.getName(), key.getName());
+      recordCannonConstructorBldr.addParameter(key.getEffectiveType(), key.getName());
     }
+
+    recordSpec.addMethod(configureMethod(argsSpecName));
     recordSpec.addMethod(MethodSpec.constructorBuilder()//
-        .addCode(constructor.build())//
+        .addParameter(ParameterizedTypeName.get(ClassName.get(Consumer.class), argsSpecName), "configure")//
+        .addStatement("this(applyConfig(new $T(), configure))", argsSpecName)//
         .addModifiers(Modifier.PUBLIC)//
-        .addParameter(argsSpecName, "args")//
+        .build());
+    recordSpec.addMethod(recordCopyConstructorBldr.build());
+    recordSpec.addMethod(recordCannonConstructorBldr.build());
+
+    argsSpec.addMethod(argsCopyConstructorBldr.build());
+
+    argsSpec.addMethod(MethodSpec.constructorBuilder()//
+        .addModifiers(Modifier.PUBLIC)//
         .build());
 
     recordSpec.addType(argsSpec.build());
 
     return recordSpec.build();
+  }
+
+  private MethodSpec configureMethod(TypeName argsType) {
+    MethodSpec.Builder m = MethodSpec.methodBuilder("applyConfig")//
+        .addModifiers(Modifier.PRIVATE, Modifier.STATIC)//
+        .returns(argsType)//
+        .addParameter(argsType, "args")//
+        .addParameter(ParameterizedTypeName.get(ClassName.get(Consumer.class), argsType), "configure")//
+        .addStatement("configure.accept(args)")//
+        .addStatement("return args");
+    getDefinition().typeParameters().forEach(arg -> {
+      m.addTypeVariable(arg);
+    });
+    return m.build();
   }
 
   private MethodSpec createGetter(ModelKeyDefinition key) {

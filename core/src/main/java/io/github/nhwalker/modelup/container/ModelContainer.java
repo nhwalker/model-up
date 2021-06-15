@@ -9,7 +9,7 @@ import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
 import io.github.nhwalker.modelup.Model;
-import io.github.nhwalker.modelup.container.ListenerSettings.ConcurrentListenerSettings;
+import io.github.nhwalker.modelup.container.ListenerArgs.ConcurrentListenerArgs;
 
 // TODO
 public abstract class ModelContainer<T extends Model> implements ModelListenerManagement<T> {
@@ -109,12 +109,12 @@ public abstract class ModelContainer<T extends Model> implements ModelListenerMa
   }
 
   @Override
-  public ListenerRegistration registerConcurrentListener(ConcurrentListenerSettings settings, ModelListener<? super T> listener) {
+  public ListenerRegistration registerConcurrentListener(ConcurrentListenerArgs settings, ModelListener<? super T> listener) {
     return this.listenerManager.registerListener(settings, listener);
   }
 
   @Override
-  public ListenerRegistration registerListener(ListenerSettings settings, ModelListener<? super T> listener) {
+  public ListenerRegistration registerListener(ListenerArgs settings, ModelListener<? super T> listener) {
     return this.listenerManager.registerListener(settings, listener);
   }
 
@@ -136,14 +136,14 @@ public abstract class ModelContainer<T extends Model> implements ModelListenerMa
 
     private PostProcessing<T> postProcessing = null;
     private boolean concurrentListeners = false;
-    private ConcurrentListenerSettings defaultConcurrentListenerSettings = null;
+    private ConcurrentListenerArgs defaultConcurrentListenerSettings = null;
     private T initialValue = null;
 
     public boolean getIsConcurrentListeners() {
       return concurrentListeners;
     }
 
-    public ConcurrentListenerSettings getDefaultConcurrentListenerSettings() {
+    public ConcurrentListenerArgs getDefaultConcurrentListenerSettings() {
       return defaultConcurrentListenerSettings;
     }
 
@@ -159,7 +159,7 @@ public abstract class ModelContainer<T extends Model> implements ModelListenerMa
       this.concurrentListeners = true;
     }
 
-    public void defaultConcurrentListenerSettings(ConcurrentListenerSettings settings) {
+    public void defaultConcurrentListenerSettings(ConcurrentListenerArgs settings) {
       this.defaultConcurrentListenerSettings = settings;
     }
 

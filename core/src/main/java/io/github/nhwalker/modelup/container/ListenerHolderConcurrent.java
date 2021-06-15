@@ -8,8 +8,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.github.nhwalker.modelup.Model;
-import io.github.nhwalker.modelup.container.ListenerSettings.ChangeEventQueueFactory;
-import io.github.nhwalker.modelup.container.ListenerSettings.ConcurrentListenerSettings;
+import io.github.nhwalker.modelup.container.ListenerArgs.ChangeEventQueueFactory;
+import io.github.nhwalker.modelup.container.ListenerArgs.ConcurrentListenerArgs;
 
 /**
  * Helper class for managing a listener that is notified of events concurrently
@@ -21,20 +21,20 @@ class ListenerHolderConcurrent<T extends Model> extends ListenerHolder<T> {
   private final Executor executor;
   private final AtomicBoolean queued = new AtomicBoolean();
 
-  ListenerHolderConcurrent(ModelListener<? super T> listener, ConcurrentListenerSettings settings) {
+  ListenerHolderConcurrent(ModelListener<? super T> listener, ConcurrentListenerArgs settings) {
     this(listener, settings, null);
   }
 
-  ListenerHolderConcurrent(ModelListener<? super T> listener, ConcurrentListenerSettings settings,
-      ConcurrentListenerSettings defaultSettings) {
+  ListenerHolderConcurrent(ModelListener<? super T> listener, ConcurrentListenerArgs settings,
+      ConcurrentListenerArgs defaultSettings) {
     super(listener);
-    Executor executor = settings.getExecutor();
+    Executor executor = settings.executor();
     if (executor == null && defaultSettings != null) {
-      executor = defaultSettings.getExecutor();
+      executor = defaultSettings.executor();
     }
-    ChangeEventQueueFactory queueFactory = settings.getNewChangeEventQueue();
+    ChangeEventQueueFactory queueFactory = settings.queue();
     if (queueFactory == null && defaultSettings != null) {
-      queueFactory = defaultSettings.getNewChangeEventQueue();
+      queueFactory = defaultSettings.queue();
     }
     this.executor = executor == null ? ForkJoinPool.commonPool() : executor;
     this.queue = queueFactory == null ? new LinkedBlockingQueue<>() : Objects.requireNonNull(queueFactory.create());

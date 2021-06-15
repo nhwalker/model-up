@@ -3,28 +3,28 @@ package io.github.nhwalker.modelup.container;
 import java.util.function.Consumer;
 
 import io.github.nhwalker.modelup.Model;
-import io.github.nhwalker.modelup.container.ListenerSettings.ConcurrentListenerSettings;
+import io.github.nhwalker.modelup.container.ListenerArgs.ConcurrentListenerArgs;
 
 // TODO Document
 public interface ModelListenerManagement<T extends Model> {
 
   ListenerRegistration registerListener(ModelListener<? super T> listener);
 
-  ListenerRegistration registerListener(ListenerSettings settings, ModelListener<? super T> listener);
+  ListenerRegistration registerListener(ListenerArgs settings, ModelListener<? super T> listener);
 
-  default ListenerRegistration registerListener(Consumer<ListenerSettings> settings,
+  default ListenerRegistration registerListener(Consumer<ListenerArgs> settings,
       ModelListener<? super T> listener) {
-    ListenerSettings x = new ListenerSettings();
+    ListenerArgs x = new ListenerArgs();
     settings.accept(x);
     return registerListener(x, listener);
   }
 
-  ListenerRegistration registerConcurrentListener(ConcurrentListenerSettings settings,
+  ListenerRegistration registerConcurrentListener(ConcurrentListenerArgs settings,
       ModelListener<? super T> listener);
 
-  default ListenerRegistration registerConcurrentListener(Consumer<ConcurrentListenerSettings> settings,
+  default ListenerRegistration registerConcurrentListener(Consumer<ConcurrentListenerArgs> settings,
       ModelListener<? super T> listener) {
-    ConcurrentListenerSettings x = new ConcurrentListenerSettings();
+    ConcurrentListenerArgs x = new ConcurrentListenerArgs();
     settings.accept(x);
     return registerConcurrentListener(x, listener);
   }
@@ -41,24 +41,24 @@ public interface ModelListenerManagement<T extends Model> {
     }
 
     @Override
-    public ListenerRegistration registerListener(ListenerSettings settings, ModelListener<? super T> listener) {
+    public ListenerRegistration registerListener(ListenerArgs settings, ModelListener<? super T> listener) {
       return delegate().registerListener(settings, listener);
     }
 
     @Override
-    public ListenerRegistration registerConcurrentListener(ConcurrentListenerSettings settings,
+    public ListenerRegistration registerConcurrentListener(ConcurrentListenerArgs settings,
         ModelListener<? super T> listener) {
       return delegate().registerConcurrentListener(settings, listener);
     }
 
     @Override
-    public final ListenerRegistration registerConcurrentListener(Consumer<ConcurrentListenerSettings> settings,
+    public final ListenerRegistration registerConcurrentListener(Consumer<ConcurrentListenerArgs> settings,
         ModelListener<? super T> listener) {
       return ModelListenerManagement.super.registerConcurrentListener(settings, listener);
     }
 
     @Override
-    public final ListenerRegistration registerListener(Consumer<ListenerSettings> settings,
+    public final ListenerRegistration registerListener(Consumer<ListenerArgs> settings,
         ModelListener<? super T> listener) {
       return ModelListenerManagement.super.registerListener(settings, listener);
     }

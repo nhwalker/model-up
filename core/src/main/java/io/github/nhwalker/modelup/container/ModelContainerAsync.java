@@ -11,7 +11,7 @@ import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import io.github.nhwalker.modelup.Model;
-import io.github.nhwalker.modelup.container.ListenerSettings.ConcurrentListenerSettings;
+import io.github.nhwalker.modelup.container.ListenerArgs.ConcurrentListenerArgs;
 
 class ModelContainerAsync<T extends Model> extends ModelContainer<T> {
   private final LinkedBlockingQueue<AnUpdateEvent<?>> queue = new LinkedBlockingQueue<>();
@@ -85,8 +85,8 @@ class ModelContainerAsync<T extends Model> extends ModelContainer<T> {
   }
 
   @Override
-  public ListenerRegistration registerConcurrentListener(ConcurrentListenerSettings settings, ModelListener<? super T> listener) {
-    if (settings.getCallImmediatly()) {
+  public ListenerRegistration registerConcurrentListener(ConcurrentListenerArgs settings, ModelListener<? super T> listener) {
+    if (settings.isCallImmediatly()) {
       CompletableFuture<ListenerRegistration> future = queue(new RegisterListenerEvent(listener, settings));
       return () -> future.thenAccept(reg -> reg.unregister());
     } else {
@@ -95,8 +95,8 @@ class ModelContainerAsync<T extends Model> extends ModelContainer<T> {
   }
 
   @Override
-  public ListenerRegistration registerListener(ListenerSettings settings, ModelListener<? super T> listener) {
-    if (settings.getCallImmediatly()) {
+  public ListenerRegistration registerListener(ListenerArgs settings, ModelListener<? super T> listener) {
+    if (settings.isCallImmediatly()) {
       CompletableFuture<ListenerRegistration> future = queue(new RegisterListenerEvent(listener, settings));
       return () -> future.thenAccept(reg -> reg.unregister());
     } else {
@@ -110,9 +110,9 @@ class ModelContainerAsync<T extends Model> extends ModelContainer<T> {
 
   private class RegisterListenerEvent extends AnUpdateEvent<ListenerRegistration> {
     private final ModelListener<? super T> listener;
-    private final ListenerSettings settings;
+    private final ListenerArgs settings;
 
-    public RegisterListenerEvent(ModelListener<? super T> listener, ListenerSettings settings) {
+    public RegisterListenerEvent(ModelListener<? super T> listener, ListenerArgs settings) {
       this.listener = listener;
       this.settings = settings;
     }

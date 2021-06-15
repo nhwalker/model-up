@@ -5,7 +5,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.UnaryOperator;
 
 import io.github.nhwalker.modelup.Model;
-import io.github.nhwalker.modelup.container.ListenerSettings.ConcurrentListenerSettings;
+import io.github.nhwalker.modelup.container.ListenerArgs.ConcurrentListenerArgs;
 
 class ModelContainerSync<T extends Model> extends ModelContainer<T> {
   private final Object writeLock;
@@ -66,8 +66,8 @@ class ModelContainerSync<T extends Model> extends ModelContainer<T> {
   }
 
   @Override
-  public ListenerRegistration registerConcurrentListener(ConcurrentListenerSettings settings, ModelListener<? super T> listener) {
-    if (settings.getCallImmediatly()) {
+  public ListenerRegistration registerConcurrentListener(ConcurrentListenerArgs settings, ModelListener<? super T> listener) {
+    if (settings.isCallImmediatly()) {
       synchronized (writeLock) {
         return super.registerListener(settings, listener);
       }
@@ -77,8 +77,8 @@ class ModelContainerSync<T extends Model> extends ModelContainer<T> {
   }
 
   @Override
-  public ListenerRegistration registerListener(ListenerSettings settings, ModelListener<? super T> listener) {
-    if (settings.getCallImmediatly()) {
+  public ListenerRegistration registerListener(ListenerArgs settings, ModelListener<? super T> listener) {
+    if (settings.isCallImmediatly()) {
       synchronized (writeLock) {
         return super.registerListener(settings, listener);
       }

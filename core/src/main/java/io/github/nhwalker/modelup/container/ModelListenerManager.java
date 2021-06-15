@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -12,7 +13,7 @@ import java.util.stream.Collectors;
 
 import io.github.nhwalker.modelup.Model;
 import io.github.nhwalker.modelup.ModelKey;
-import io.github.nhwalker.modelup.container.ListenerSettings.ConcurrentListenerSettings;
+import io.github.nhwalker.modelup.container.ListenerArgs.ConcurrentListenerArgs;
 
 // TODO Document
 public class ModelListenerManager<T extends Model> implements ModelListener<T>, ModelListenerManagement<T> {
@@ -21,10 +22,10 @@ public class ModelListenerManager<T extends Model> implements ModelListener<T>, 
   private final CopyOnWriteArraySet<ListenerHolder<T>> globalListeners = new CopyOnWriteArraySet<>();
 
   private final boolean concurrent;
-  private final ConcurrentListenerSettings defaultConcurrentSettings;
+  private final ConcurrentListenerArgs defaultConcurrentSettings;
   private final DelegatingModelListenerManagement<T> clientOnlyView;
 
-  public ModelListenerManager(boolean concurrent, ConcurrentListenerSettings defaultConcurrentSettings) {
+  public ModelListenerManager(boolean concurrent, ConcurrentListenerArgs defaultConcurrentSettings) {
     this.concurrent = concurrent;
     this.defaultConcurrentSettings = defaultConcurrentSettings;
     this.clientOnlyView = new DelegatingModelListenerManagement<T>() {
@@ -43,9 +44,9 @@ public class ModelListenerManager<T extends Model> implements ModelListener<T>, 
     return new ListenerHolder<>(listener);
   }
 
-  private ListenerHolder<T> wrap(ModelListener<? super T> listener, ListenerSettings settings) {
-    if (settings instanceof ConcurrentListenerSettings) {
-      ConcurrentListenerSettings mainSettings = (ConcurrentListenerSettings) settings;
+  private ListenerHolder<T> wrap(ModelListener<? super T> listener, ListenerArgs settings) {
+    if (settings instanceof ConcurrentListenerArgs) {
+      ConcurrentListenerArgs mainSettings = (ConcurrentListenerArgs) settings;
       return new ListenerHolderConcurrent<>(listener, mainSettings, defaultConcurrentSettings);
     } else if (this.concurrent) {
       return new ListenerHolderConcurrent<>(listener, defaultConcurrentSettings);
@@ -64,25 +65,26 @@ public class ModelListenerManager<T extends Model> implements ModelListener<T>, 
   }
 
   @Override
-  public ListenerRegistration registerConcurrentListener(ConcurrentListenerSettings settings,
+  public ListenerRegistration registerConcurrentListener(ConcurrentListenerArgs settings,
       ModelListener<? super T> listener) {
     return register(listener, settings);
   }
 
   @Override
-  public ListenerRegistration registerListener(ListenerSettings settings, ModelListener<? super T> listener) {
+  public ListenerRegistration registerListener(ListenerArgs settings, ModelListener<? super T> listener) {
     return register(listener, settings);
   }
 
-  private ListenerRegistration register(ModelListener<? super T> listener, ListenerSettings settings) {
+  private ListenerRegistration register(ModelListener<? super T> listener, ListenerArgs settings) {
     ListenerRegistration reg;
-    if (settings == null || settings.getIsGlobalListener()) {
-      reg = registerGlobal(wrap(listener, settings));
+    Optional<List<ModelKey<?>>> keys = settings == null ? Optional.empty() : settings.keys();
+    if (keys.isPresent()) {
+      reg = registerByKey(wrap(listener, settings), keys.get());
     } else {
-      reg = registerByKey(wrap(listener, settings), settings.getKeys());
+      reg = registerGlobal(wrap(listener, settings));
     }
 
-    if (settings.getCallImmediatly()) {
+    if (settings.isCallImmediatly()) {
       T currentState = getCurrentState();
       if (currentState != null) {
         listener.onModelChanged(ChangeEvent.create(null, currentState));

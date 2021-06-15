@@ -34,5 +34,5 @@ public @interface ModelUp {
   
   boolean memorizeToString() default false;
   
-  Class<?> argsExtension() default void.class; 
+  String argsExtension() default ""; 
 }

@@ -11,6 +11,7 @@ public class ModelUpTypeDefinition {
   private TypeName modelType;
   private List<TypeName> modelExtends;
 
+  private TypeName argsBaseType;
   private TypeName argsType;
   private List<TypeName> argsTypeExtends;
   private boolean generateArgs;
@@ -22,6 +23,14 @@ public class ModelUpTypeDefinition {
 
   private boolean memorizeHash;
   private boolean memorizeToString;
+
+  public void argsBaseType(TypeName argsBaseType) {
+    this.argsBaseType = argsBaseType;
+  }
+
+  public TypeName argsBaseType() {
+    return argsBaseType;
+  }
 
   public void memorizeHash(boolean memorizeHash) {
     this.memorizeHash = memorizeHash;

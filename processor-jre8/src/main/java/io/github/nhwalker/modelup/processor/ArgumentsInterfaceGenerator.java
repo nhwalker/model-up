@@ -1,6 +1,5 @@
 package io.github.nhwalker.modelup.processor;
 
-
 import javax.lang.model.element.Modifier;
 
 import com.squareup.javapoet.JavaFile;
@@ -12,7 +11,7 @@ public class ArgumentsInterfaceGenerator extends AbstractModelKeyBasedGenerator 
 
   @Override
   protected JavaFile doCreate() {
-    return JavaFile.builder(TypeNameUtils.packageName(getDefinition().argsType()), createTypeSpec())//
+    return JavaFile.builder(TypeNameUtils.packageName(getDefinition().argsBaseType()), createTypeSpec())//
         .addFileComment(fileComment())//
         .build();
   }
@@ -22,17 +21,17 @@ public class ArgumentsInterfaceGenerator extends AbstractModelKeyBasedGenerator 
   }
 
   private TypeSpec createTypeSpec() {
-    TypeSpec.Builder builder = TypeSpec.interfaceBuilder(TypeNameUtils.rawType(getDefinition().argsType()));
+    TypeSpec.Builder builder = TypeSpec.interfaceBuilder(TypeNameUtils.rawType(getDefinition().argsBaseType()));
     builder.addModifiers(Modifier.PUBLIC);
-    getDefinition().typeParameters().forEach(arg->{
+    getDefinition().typeParameters().forEach(arg -> {
       builder.addTypeVariable(arg);
     });
     for (ModelKeyDefinition key : getKeys()) {
       builder.addMethod(createGetter(key));
       builder.addMethod(createSetter(key));
     }
-    
-    for(TypeName superType: getDefinition().argsTypeExtends()) {
+
+    for (TypeName superType : getDefinition().argsTypeExtends()) {
       builder.addSuperinterface(superType);
     }
 

@@ -55,7 +55,7 @@ public class ModelUpProcessor extends AbstractProcessor {
     for (Element e : elements) {
       if (e instanceof TypeElement) {
         TypeElement typeElement = (TypeElement) e;
-        ModelUpTypeDefinition typeDef = getOrCreate(cache, roundEnv, typeElement);
+        ModelUpTypeDefinition typeDef = getOrCreate(cache, typeElement);
         if (typeDef.generateKeys()) {
           runKeysGenerator(typeDef, roundEnv, typeElement);
         }
@@ -106,7 +106,7 @@ public class ModelUpProcessor extends AbstractProcessor {
     }
   }
 
-  private List<ModelKeyDefinition> findAllKeys(RoundEnvironment roundEnv, TypeElement e) {
+  private List<ModelKeyDefinition> findAllKeys(TypeElement e) {
     ImmutableSet<ExecutableElement> methods = MoreElements.getAllMethods(e, processingEnv.getTypeUtils(),
         processingEnv.getElementUtils());
 
@@ -178,19 +178,18 @@ public class ModelUpProcessor extends AbstractProcessor {
     return "";
   }
 
-  private ModelUpTypeDefinition getOrCreate(Map<ClassName, ModelUpTypeDefinition> cache, RoundEnvironment roundEnv,
-      TypeElement type) {
+  private ModelUpTypeDefinition getOrCreate(Map<ClassName, ModelUpTypeDefinition> cache, TypeElement type) {
     TypeName modelType = TypeName.get(type.asType());
     ClassName rawName = TypeNameUtils.rawType(modelType);
     ModelUpTypeDefinition def = cache.get(rawName);
     if (def == null) {
-      def = createModelUpTypeDef(cache, roundEnv, type);
+      def = createModelUpTypeDef(cache, type);
       cache.put(rawName, def);
     }
     return def;
   }
 
-  private static ClassName getRawArgsName(String basePackageName, String baseName, ModelUp modelUpAnn) {
+  private static ClassName getRawArgsName(String basePackageName, String baseName, ModelUp modelUpAnn, boolean base) {
     String packageName = basePackageName;
     if (!modelUpAnn.argsPackageName().isEmpty()) {
       packageName = modelUpAnn.argsPackageName();
@@ -200,6 +199,9 @@ public class ModelUpProcessor extends AbstractProcessor {
       name = modelUpAnn.argsTypeName();
     } else {
       name = baseName + "Args";
+      if (base) {
+        name += "Base";
+      }
     }
     return ClassName.get(packageName, name);
   }
@@ -232,8 +234,21 @@ public class ModelUpProcessor extends AbstractProcessor {
     return ClassName.get(packageName, name);
   }
 
-  private ModelUpTypeDefinition createModelUpTypeDef(Map<ClassName, ModelUpTypeDefinition> cache,
-      RoundEnvironment roundEnv, TypeElement type) {
+  private ClassName parseClassName(String packageName, String baseName, String toParse) {
+    TypeElement found;
+    found = processingEnv.getElementUtils().getTypeElement(packageName + "." + baseName + "." + toParse);
+    if (found == null) {
+      found = processingEnv.getElementUtils().getTypeElement(packageName + "." + toParse);
+      if (found == null) {
+        found = processingEnv.getElementUtils().getTypeElement(toParse);
+      }
+    }
+    Objects.requireNonNull(found);
+    return TypeNameUtils.rawType(TypeName.get(found.asType()));
+
+  }
+
+  private ModelUpTypeDefinition createModelUpTypeDef(Map<ClassName, ModelUpTypeDefinition> cache, TypeElement type) {
     ModelUp modelUpAnn = Objects.requireNonNull(type.getAnnotation(ModelUp.class));
 
     ModelUpTypeDefinition def = new ModelUpTypeDefinition();
@@ -242,7 +257,16 @@ public class ModelUpProcessor extends AbstractProcessor {
     TypeName modelType = TypeName.get(type.asType());
     def.modelType(modelType);
 
-    ClassName rawArgsName = getRawArgsName(packageName, baseName, modelUpAnn);
+    ClassName rawArgsName;
+    ClassName rawArgsNameBase;
+    if (modelUpAnn.argsExtension().isEmpty()) {
+      rawArgsName = getRawArgsName(packageName, baseName, modelUpAnn, false);
+      rawArgsNameBase = rawArgsName;
+    } else {
+      rawArgsNameBase = getRawArgsName(packageName, baseName, modelUpAnn, true);
+      rawArgsName = parseClassName(packageName, baseName, modelUpAnn.argsExtension());
+    }
+
     ClassName rawKeysName = getRawKeysName(packageName, baseName, modelUpAnn);
     ClassName rawRecordName = getRawRecordName(packageName, baseName, modelUpAnn);
     def.generateArgs(modelUpAnn.generateArgs());
@@ -266,10 +290,12 @@ public class ModelUpProcessor extends AbstractProcessor {
       def.typeParameters(Collections.unmodifiableList(params));
       TypeName[] args = params.toArray(new TypeName[0]);
       def.argsType(ParameterizedTypeName.get(rawArgsName, args));
+      def.argsBaseType(ParameterizedTypeName.get(rawArgsNameBase, args));
       def.recordType(ParameterizedTypeName.get(rawRecordName, args));
 
     } else {
       def.argsType(rawArgsName);
+      def.argsBaseType(rawArgsNameBase);
       def.recordType(rawRecordName);
       def.typeParameters(Collections.emptyList());
     }
@@ -277,23 +303,35 @@ public class ModelUpProcessor extends AbstractProcessor {
     ArrayList<TypeName> modelExtends = new ArrayList<>();
     ArrayList<TypeName> argsExtends = new ArrayList<>();
     for (TypeMirror parent : type.getInterfaces()) {
-      TypeName parentType = TypeName.get(parent);
-      modelExtends.add(parentType);
-      ClassName rawParentType = TypeNameUtils.rawType(parentType);
-      ClassName rawParentArgsType = ClassName.get(rawParentType.packageName(), rawParentType.simpleName() + "Args");
-      if (parentType instanceof ParameterizedTypeName) {
-        ParameterizedTypeName asParam = (ParameterizedTypeName) parentType;
-        argsExtends.add(ParameterizedTypeName.get(rawParentArgsType, asParam.typeArguments.toArray(new TypeName[0])));
-      } else {
-        argsExtends.add(rawParentArgsType);
+      ModelUpTypeDefinition parentDefinition = findModelUpDef(cache, parent);
+      if (parentDefinition != null) {
+        TypeName parentType = TypeName.get(parent);
+        modelExtends.add(parentType);
+        ClassName rawParentArgsType = TypeNameUtils.rawType(parentDefinition.argsType());
+        if (parentType instanceof ParameterizedTypeName) {
+          ParameterizedTypeName asParam = (ParameterizedTypeName) parentType;
+          argsExtends.add(ParameterizedTypeName.get(rawParentArgsType, asParam.typeArguments.toArray(new TypeName[0])));
+        } else {
+          argsExtends.add(rawParentArgsType);
+        }
       }
     }
 
     def.argsTypeExtends(argsExtends);
     def.modelExtends(modelExtends);
-    def.keys(findAllKeys(roundEnv, type));
+    def.keys(findAllKeys(type));
 
     return def;
   }
 
+  private ModelUpTypeDefinition findModelUpDef(Map<ClassName, ModelUpTypeDefinition> cache, TypeMirror parent) {
+    Element parentElement = processingEnv.getTypeUtils().asElement(parent);
+    if (parentElement instanceof TypeElement) {
+      ModelUp modelUpAnn = parentElement.getAnnotation(ModelUp.class);
+      if (modelUpAnn != null) {
+        return getOrCreate(cache, (TypeElement) parentElement);
+      }
+    }
+    return null;
+  }
 }

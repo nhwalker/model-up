@@ -35,6 +35,9 @@ public class ArgumentsInterfaceGenerator extends AbstractModelKeyBasedGenerator 
       builder.addSuperinterface(superType);
     }
 
+    builder.addMethod(copyMethod(getDefinition().argsType()));
+    builder.addMethod(copyMethod(getDefinition().modelType()));
+
     return builder.build();
   }
 
@@ -51,5 +54,16 @@ public class ArgumentsInterfaceGenerator extends AbstractModelKeyBasedGenerator 
         .addModifiers(Modifier.ABSTRACT, Modifier.PUBLIC)//
         .addParameter(key.getEffectiveType(), key.getName());
     return b.build();
+  }
+
+  private MethodSpec copyMethod(TypeName copySrcType) {
+    MethodSpec.Builder b = MethodSpec.methodBuilder("copy")//
+        .addModifiers(Modifier.DEFAULT, Modifier.PUBLIC)//
+        .addParameter(copySrcType, "copy");
+    for (ModelKeyDefinition key : getKeys()) {
+      b.addStatement("this.$L(copy.$L())", key.getName(), key.getName());
+    }
+    return b.build();
+
   }
 }

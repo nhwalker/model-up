@@ -551,4 +551,5 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
         .addParameter(ParameterSpec.builder(fieldKeyWildcardType, "key").build()).addCode(body.build()).build();
     return methodSpec;
   }
+  
 }

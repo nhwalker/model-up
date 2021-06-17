@@ -18,7 +18,7 @@ public interface ModelArgs extends ModelOrArgs {
    * @param toCopy the model to copy
    */
   @SuppressWarnings({ "unchecked", "rawtypes" })
-  default void copyFrom(ModelOrArgs toCopy) {
+  default void copy(ModelOrArgs toCopy) {
     for (ModelKey<?> key : toCopy.fieldKeys()) {
       if (hasField(key)) {
         set((ModelKey) key, toCopy.get(key));

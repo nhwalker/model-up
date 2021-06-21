@@ -8,6 +8,8 @@ package io.github.nhwalker.modelup;
  */
 public interface ModelArgs extends ModelOrArgs {
 
+  void copy(ModelOrArgs toCopy);
+
   /**
    * Copies values from fields in {@toCopy} that are also in this
    * {@code ModelArgs}.
@@ -18,7 +20,7 @@ public interface ModelArgs extends ModelOrArgs {
    * @param toCopy the model to copy
    */
   @SuppressWarnings({ "unchecked", "rawtypes" })
-  default void copy(ModelOrArgs toCopy) {
+  default void copyLienent(ModelOrArgs toCopy) {
     for (ModelKey<?> key : toCopy.fieldKeys()) {
       if (hasField(key)) {
         set((ModelKey) key, toCopy.get(key));
@@ -32,8 +34,8 @@ public interface ModelArgs extends ModelOrArgs {
    * @param <T>   the value type
    * @param key   key to set
    * @param value value to set
-   * @throws IllegalArgumentException if {@code key} does not belong to this object
-   *                                  ({@link #hasField(ModelKey)} is
+   * @throws IllegalArgumentException if {@code key} does not belong to this
+   *                                  object ({@link #hasField(ModelKey)} is
    *                                  {@code false})
    */
   <T> void set(ModelKey<T> key, T value);

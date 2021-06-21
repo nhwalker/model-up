@@ -6,10 +6,11 @@ import java.util.List;
 import java.util.Objects;
 
 import io.github.nhwalker.modelup.ModelUp;
+import io.github.nhwalker.modelup.Model;
 import io.github.nhwalker.modelup.examples.jre8.other.PersonArgs;
 
 @ModelUp(argsExtension = "io.github.nhwalker.modelup.examples.jre8.other.PersonArgs")
-public interface Person extends Named {
+public interface Person extends Named,HasAddress, Model{
 
   int age();
 

@@ -2,29 +2,20 @@ package io.github.nhwalker.modelup.processor;
 
 import java.util.Iterator;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import javax.lang.model.element.Modifier;
 
-import com.squareup.javapoet.AnnotationSpec;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.CodeBlock;
 import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.ParameterSpec;
 import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
-import com.squareup.javapoet.TypeVariableName;
 import com.squareup.javapoet.WildcardTypeName;
-
-import io.github.nhwalker.modelup.Model;
-import io.github.nhwalker.modelup.ModelArgs;
-import io.github.nhwalker.modelup.ModelKey;
-import io.github.nhwalker.modelup.ModelWithArgs;
 
 public class RecordGenerator extends AbstractModelKeyBasedGenerator {
 
@@ -56,14 +47,6 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
 
     recordSpec.addSuperinterface(getDefinition().modelType());
 
-    // TODO: Do I want to include this?
-    if (getDefinition().isAModelWithArgs()) {
-      recordSpec.addSuperinterface(
-          ParameterizedTypeName.get(ClassName.get(ModelWithArgs.class), getDefinition().recordType(), argsTypeName));
-    } else if (getDefinition().isAModel()) {
-      recordSpec.addSuperinterface(ClassName.get(Model.class));
-    }
-
     for (ModelKeyDefinition key : getKeys()) {
       FieldSpec recordField = FieldSpec//
           .builder(key.getEffectiveType(), key.getName(), Modifier.PRIVATE, Modifier.FINAL)//
@@ -87,9 +70,9 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     recordSpec.addType(createArgsType(argsTypeRawName, argsTypeName));
 
     if (getDefinition().isAModel()) {
-      recordSpec.addMethod(fieldKeysMethodSpec());
-      recordSpec.addMethod(getMethodSpec());
-      recordSpec.addMethod(hasFieldMethodSpec());
+      recordSpec.addMethod(ModelMethodFactory.fieldKeysMethodSpec(getDefinition()).build());
+      recordSpec.addMethod(ModelMethodFactory.getMethodSpec(getDefinition(),true).build());
+      recordSpec.addMethod(ModelMethodFactory.hasFieldMethodSpec(getDefinition()).build());
     }
     if (getDefinition().isAModelWithArgs()) {
       recordSpec.addMethod(withUpdateMethod(argsTypeName));
@@ -109,9 +92,6 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     }
 
     argsSpec.addSuperinterface(getDefinition().argsType());
-    if (getDefinition().isAModel()) {
-      argsSpec.addSuperinterface(ClassName.get(ModelArgs.class));
-    }
 
     for (ModelKeyDefinition key : getKeys()) {
       FieldSpec argsField = FieldSpec//
@@ -131,13 +111,6 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     addHashCodeMethod(argsSpec, false);
     argsSpec.addMethod(equalsMethod(argsSpecRawName, false));
     addToStringMethod(argsSpecRawName, argsSpec, false);
-
-    if (getDefinition().isAModel()) {
-      argsSpec.addMethod(fieldKeysMethodSpec());
-      argsSpec.addMethod(getMethodSpec());
-      argsSpec.addMethod(hasFieldMethodSpec());
-      argsSpec.addMethod(setMethodSpec());
-    }
 
     return argsSpec.build();
 
@@ -438,118 +411,8 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
     type.addMethod(toString.build());
   }
 
-  private MethodSpec fieldKeysMethodSpec() {
-    ParameterizedTypeName fieldKeyWildcardType = //
-        ParameterizedTypeName.get(ClassName.get(ModelKey.class), WildcardTypeName.subtypeOf(Object.class));
-    ParameterizedTypeName fieldSetType = ParameterizedTypeName.get(ClassName.get(Set.class), fieldKeyWildcardType);
+ 
 
-    MethodSpec methodSpec = MethodSpec.methodBuilder("fieldKeys")//
-        .addModifiers(Modifier.PUBLIC)//
-        .returns(fieldSetType)//
-        .addStatement("return $T.fields()", getDefinition().keysType())//
-        .build();
-    return methodSpec;
-  }
+ 
 
-  private MethodSpec getMethodSpec() {
-    TypeVariableName typeVariableName = TypeVariableName.get(findTypeVariableName());
-    ParameterizedTypeName fieldKeyWildcardType = //
-        ParameterizedTypeName.get(ClassName.get(ModelKey.class), typeVariableName);
-
-    CodeBlock.Builder body = CodeBlock.builder();
-    body.beginControlFlow("switch(key.name())");
-    for (ModelKeyDefinition key : getDefinition().keys()) {
-      body.add("case $S: return key.type().cast(this.$L);\n", key.getName(), key.getName());
-    }
-    body.add("default: throw new $T($S + key.name());\n", IllegalArgumentException.class, "No such field: ");
-    body.endControlFlow();
-
-    MethodSpec methodSpec = MethodSpec.methodBuilder("get")//
-        .addModifiers(Modifier.PUBLIC)//
-        .returns(typeVariableName)//
-        .addParameter(ParameterSpec.builder(fieldKeyWildcardType, "key").build())//
-        .addCode(body.build())//
-        .addTypeVariable(typeVariableName)//
-        .build();
-    return methodSpec;
-  }
-
-  private boolean anyMatchingParams(String target) {
-    return getDefinition().typeParameters().stream()//
-        .anyMatch(x -> x.name.equals(target));
-  }
-
-  private String findTypeVariableName() {
-    String target = "T";
-    boolean hasMatch = anyMatchingParams(target);
-    while (hasMatch) {
-      target += "T";
-      hasMatch = anyMatchingParams(target);
-    }
-    return target;
-  }
-
-  private MethodSpec setMethodSpec() {
-
-    TypeVariableName typeVariableName = TypeVariableName.get(findTypeVariableName());
-
-    ParameterizedTypeName fieldKeyWildcardType = //
-        ParameterizedTypeName.get(ClassName.get(ModelKey.class), typeVariableName);
-
-    CodeBlock.Builder body = CodeBlock.builder();
-    body.beginControlFlow("switch(key.name())");
-    for (ModelKeyDefinition key : getDefinition().keys()) {
-      if (key.getValueType().isPrimitive()) {
-        body.add("case $S: this.$L = ($T)value; break; \n", key.getName(), key.getName(), key.getValueType().box());
-      } else {
-        body.add("case $S: this.$L = ($T)value; break; \n", key.getName(), key.getName(), key.getEffectiveType());
-      }
-    }
-    body.add("default: throw new $T($S + key.name());\n", IllegalArgumentException.class, "No such field: ");
-    body.endControlFlow();
-
-    MethodSpec.Builder methodSpec = MethodSpec.methodBuilder("set")//
-        .addModifiers(Modifier.PUBLIC)//
-        .addParameter(ParameterSpec.builder(fieldKeyWildcardType, "key").build())//
-        .addParameter(ParameterSpec.builder(typeVariableName, "value").build())//
-        .addCode(body.build())//
-        .addTypeVariable(typeVariableName);
-    if (needsUnsafeCastAnnotation()) {
-      methodSpec.addAnnotation(AnnotationSpec.builder(SuppressWarnings.class)//
-          .addMember("value", "$S", "unchecked").build());
-    }
-    return methodSpec.build();
-  }
-
-  private boolean needsUnsafeCastAnnotation() {
-    return getDefinition().keys().stream().anyMatch(field -> {
-      TypeName name = field.getEffectiveType();
-      if (name instanceof TypeVariableName) {
-        return true;
-      } else if (name instanceof ParameterizedTypeName) {
-        return true;
-      }
-      return false;
-    });
-  }
-
-  private MethodSpec hasFieldMethodSpec() {
-    ParameterizedTypeName fieldKeyWildcardType = //
-        ParameterizedTypeName.get(ClassName.get(ModelKey.class), WildcardTypeName.subtypeOf(Object.class));
-
-    CodeBlock.Builder body = CodeBlock.builder();
-    body.beginControlFlow("switch(key.name())");
-    for (ModelKeyDefinition key : getDefinition().keys()) {
-      body.add("case $S: return true;\n", key.getName());
-    }
-    body.add("default: return false;\n");
-    body.endControlFlow();
-
-    MethodSpec methodSpec = MethodSpec.methodBuilder("hasField")//
-        .addModifiers(Modifier.PUBLIC)//
-        .returns(boolean.class)//
-        .addParameter(ParameterSpec.builder(fieldKeyWildcardType, "key").build()).addCode(body.build()).build();
-    return methodSpec;
-  }
-  
 }

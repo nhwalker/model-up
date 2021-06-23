@@ -8,22 +8,29 @@ import com.squareup.javapoet.TypeName;
 public class ModelKeyDefinition {
 
   private final String name;
-  
+
   private final TypeName valueType;
   private final TypeName effectiveType;
   private final TypeName effectiveKeyType;
-  
+
   private final TypeName belongsTo;
   private final String fieldDescription;
-  
+
+  private final boolean overrides;
+
   public ModelKeyDefinition(String name, TypeName valueType, TypeName effectiveType, TypeName effectiveKeyType,
-      TypeName belongsTo, String fieldDescription) {
+      TypeName belongsTo, String fieldDescription, boolean overrides) {
     this.name = name;
     this.valueType = valueType;
     this.effectiveType = effectiveType;
     this.effectiveKeyType = effectiveKeyType;
     this.belongsTo = belongsTo;
     this.fieldDescription = fieldDescription;
+    this.overrides = overrides;
+  }
+
+  public boolean overrides() {
+    return overrides;
   }
 
   public String getName() {

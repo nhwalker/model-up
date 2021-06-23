@@ -5,6 +5,7 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,7 +29,9 @@ import javax.tools.Diagnostic.Kind;
 import com.google.auto.common.MoreElements;
 import com.google.auto.common.MoreTypes;
 import com.google.common.base.Predicate;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Multimap;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.ParameterizedTypeName;
@@ -146,12 +149,60 @@ public class ModelUpProcessor extends AbstractProcessor {
             TypeName effectiveKeyType = effectiveType(effectiveType);
 
             fields.add(new ModelKeyDefinition(name, returnTypeName, effectiveType, effectiveKeyType,
-                TypeName.get(e.asType()), doc));
+                TypeName.get(e.asType()), doc,false));
           }
         }
       }
     }
     return fields;
+  }
+
+  private List<ModelKeyDefinition> findKeys(TypeElement type, boolean isAModel) {
+    System.out.println("::::::::::::"+type.getSimpleName().toString());
+    
+    Set<ExecutableElement> allMethods = MoreElements.getLocalAndInheritedMethods(type, processingEnv.getTypeUtils(),
+        processingEnv.getElementUtils());
+    Multimap<String, ExecutableElement> map = ArrayListMultimap.create();
+    for (ExecutableElement method : allMethods) {
+      if (isProperty(method, isAModel)) {
+        System.out.println(method.getSimpleName()+": "+method.getEnclosingElement().getSimpleName());
+        map.put(method.getSimpleName().toString(), method);
+      }
+    }
+
+    List<ModelKeyDefinition> fields = new ArrayList<>();
+    Set<ExecutableElement> actualMethods = MoreElements.getAllMethods(type, processingEnv.getTypeUtils(),
+        processingEnv.getElementUtils());
+    for (ExecutableElement method : actualMethods) {
+      if (isProperty(method, isAModel)) {
+        String name = method.getSimpleName().toString();
+        String comment = processingEnv.getElementUtils().getDocComment(method);
+        String doc = processDoc(comment);
+
+        DeclaredType declaredType = MoreTypes.asDeclared(type.asType());
+
+        TypeName returnTypeName = TypeName.get(method.getReturnType());
+        TypeMirror methodMirror = processingEnv.getTypeUtils().asMemberOf(declaredType, method);
+        TypeName effectiveType = TypeName.get(MoreTypes.asExecutable(methodMirror).getReturnType());
+        TypeName effectiveKeyType = effectiveType(effectiveType);
+        boolean overrides = map.get(name).stream()
+            .anyMatch(m -> processingEnv.getElementUtils().overrides(method, m, type));
+        System.out.println(name+" >> "+overrides+" >> "+map.get(name).size());
+        fields.add(new ModelKeyDefinition(name, returnTypeName, effectiveType, effectiveKeyType,
+            TypeName.get(type.asType()), doc,overrides));
+
+      }
+    }
+    return fields;
+  }
+
+  private boolean isProperty(ExecutableElement method, boolean isAModel) {
+    String name = method.getSimpleName().toString();
+    return !method.getModifiers().contains(Modifier.STATIC) //
+        && !IGNORE.contains(name) //
+        && method.getParameters().isEmpty()//
+        && (!isAModel || !IGNORE_MODEL.contains(name))//
+        && method.getReturnType().getKind() != TypeKind.VOID;
   }
 
   private static TypeName effectiveType(TypeName valueType) {
@@ -371,7 +422,7 @@ public class ModelUpProcessor extends AbstractProcessor {
 
     def.argsTypeExtends(argsExtends);
     def.modelExtends(modelExtends);
-    def.keys(findAllKeys(type, def.isAModel()));
+    def.keys(findKeys(type, def.isAModel()));
     def.initializeArgsMethods(initializeArgsMethods);
     def.sanatizeArgsMethods(sanatizeArgsMethods);
     def.validateMethods(validateMethods);

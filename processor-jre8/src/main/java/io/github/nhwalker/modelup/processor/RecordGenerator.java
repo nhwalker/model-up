@@ -231,6 +231,9 @@ public class RecordGenerator extends AbstractModelKeyBasedGenerator {
         .addModifiers(Modifier.PUBLIC)//
         .returns(key.getEffectiveType())//
         .addStatement("return this.$N", key.getName());
+    if(key.overrides()) {
+      b.addAnnotation(Override.class);
+    }
     return b.build();
   }
 

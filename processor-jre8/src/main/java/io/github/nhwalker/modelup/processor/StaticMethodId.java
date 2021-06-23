@@ -1,5 +1,7 @@
 package io.github.nhwalker.modelup.processor;
 
+import java.util.Objects;
+
 import com.squareup.javapoet.ClassName;
 
 public class StaticMethodId {
@@ -24,6 +26,23 @@ public class StaticMethodId {
 
   public boolean isInherit() {
     return inherit;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(inherit, name, type);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj)
+      return true;
+    if (obj == null)
+      return false;
+    if (getClass() != obj.getClass())
+      return false;
+    StaticMethodId other = (StaticMethodId) obj;
+    return inherit == other.inherit && Objects.equals(name, other.name) && Objects.equals(type, other.type);
   }
 
 }
